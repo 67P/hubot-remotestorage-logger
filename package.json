@@ -1,0 +1,22 @@
+{
+  "name": "hubot-remotestorage-logger",
+  "version": "0.1.0",
+  "description": "Logs channel messages to a remoteStorage-enabled account",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "hubot",
+    "hubot-script",
+    "remotestorage"
+  ],
+  "authors": [
+    "Sebastian Kippe <sebastian@kip.pe>"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "remotestoragejs": "remotestorage/remotestorage.js#eafe8ce4e975479c511c7685b1c9a70fcef0bebe",
+    "babel": "^5.6.14"
+  }
+}
