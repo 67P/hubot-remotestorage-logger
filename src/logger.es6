@@ -13,6 +13,7 @@
  * Commands:
  *
  * Notes:
+ *   Some code translated from hubot-logger
  *
  * Author:
  *   Sebastian Kippe
