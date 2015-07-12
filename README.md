@@ -1,5 +1,7 @@
 # hubot-remotestorage-logger
 
+[![npm](https://img.shields.io/npm/v/hubot-remotestorage-logger.svg)](https://www.npmjs.com/package/hubot-remotestorage-logger)
+
 This Hubot script logs chat messages to remoteStorage-enabled accounts.
 
 ## Configuration
