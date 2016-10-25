@@ -33,8 +33,8 @@ export default function(robot) {
   rsUser = process.env.RS_LOGGER_USER;
   rsToken = process.env.RS_LOGGER_TOKEN;
 
-  var log = function(str) {
-    robot.logger.info(`[hubot-rs-logger] ${str}`);
+  const log = function(str, logLevel='info') {
+    robot.logger[logLevel](`[hubot-rs-logger] ${str}`);
   };
 
   if (typeof rsUser === "undefined" || typeof rsToken === "undefined") {
@@ -118,8 +118,9 @@ export default function(robot) {
 
         messageCache[room] = [];
         rsAddMessages(room, messages).then(function(){
-        }, function() {
+        }, function(error) {
           messageCache[room] = messages.concat(messageCache[room]);
+          log(error, 'error');
         });
       } else {
         // nothing to flush
