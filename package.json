@@ -1,7 +1,7 @@
 {
   "name": "hubot-remotestorage-logger",
   "version": "0.3.0",
-  "description": "Logs channel messages to a remoteStorage-enabled account",
+  "description": "Logs channel messages to a remoteStorage account",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

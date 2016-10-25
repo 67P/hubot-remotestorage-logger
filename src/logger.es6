@@ -16,7 +16,7 @@
  *   Some code translated from hubot-logger
  *
  * Author:
- *   Sebastian Kippe
+ *   Sebastian Kippe <sebastian@kip.pe>
 */
 
 var hubot = require("hubot");
@@ -27,11 +27,12 @@ export default function(robot) {
   // SETUP
   //
 
-  var RemoteStorage, remoteStorage, rsToken, rsUser;
+  var RemoteStorage, remoteStorage, rsToken, rsUser, hubotAdapter;
   var messageCache = {};
 
   rsUser = process.env.RS_LOGGER_USER;
   rsToken = process.env.RS_LOGGER_TOKEN;
+  hubotAdapter = robot.adapterName;
 
   const log = function(str, logLevel='info') {
     robot.logger[logLevel](`[hubot-rs-logger] ${str}`);
@@ -129,17 +130,28 @@ export default function(robot) {
   };
 
   var rsAddMessages = function(room, messages) {
-    let rsArchive = new remoteStorage.chatMessages.DailyArchive({
-      // TODO support format for other adapters/protocols
+    let archive = {
       server: {
-        type: "irc",
-        name: process.env.RS_LOGGER_SERVER_NAME,
-        ircURI: "irc://" + process.env.HUBOT_IRC_SERVER
+        type: hubotAdapter,
+        name: process.env.RS_LOGGER_SERVER_NAME
       },
-      channelName: room,
       date: new Date(messages[0].timestamp),
       isPublic: process.env.RS_LOGGER_PUBLIC != null
-    });
+    };
+
+    switch (hubotAdapter) {
+      case 'irc':
+        archive.channelName = room;
+        archive.server.ircURI = "irc://" + process.env.HUBOT_IRC_SERVER;
+        break;
+      case 'xmpp':
+        let [roomName, mucHost] = room.split("@");
+        archive.channelName = roomName;
+        archive.server.xmppMUC = mucHost;
+        break;
+    }
+
+    let rsArchive = new remoteStorage.chatMessages.DailyArchive(archive);
 
     return rsArchive.addMessages(messages);
   };
