@@ -26,11 +26,6 @@ global.XMLHttpRequest = require('xhr2');
 const RemoteStorage = require("remotestoragejs");
 const ChatMessages  = require("remotestorage-module-chat-messages");
 
-// TODO Remove once re-added in rs.js package
-RemoteStorage.WireClient.readBinaryData = function (content, mimeType, callback) {
-  callback(content);
-};
-
 const remoteStorage = new RemoteStorage({
   modules: [ChatMessages.default]
 });
