@@ -5,7 +5,8 @@
     "require",
     "process",
     "module",
-    "exports"
+    "exports",
+    "setInterval"
   ],
   "browser": false,
   "boss": true,

@@ -1,5 +1,3 @@
-/* global setInterval */
-
 /* Description:
  *   Logs channel messages to a remoteStorage-enabled account
  *
