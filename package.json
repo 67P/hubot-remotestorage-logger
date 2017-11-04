@@ -19,7 +19,7 @@
   "dependencies": {
     "hubot": "2.x",
     "remotestorage-module-chat-messages": "~1.0.1",
-    "remotestoragejs": "github:remotestorage/remotestorage.js#v1.0.0-rc1",
+    "remotestoragejs": "github:remotestorage/remotestorage.js#v1.0.0-rc5",
     "xhr2": "^0.1.4"
   },
   "peerDependencies": {
