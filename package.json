@@ -1,6 +1,6 @@
 {
   "name": "hubot-remotestorage-logger",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Logs channel messages to a remoteStorage account",
   "main": "index.js",
   "scripts": {
