@@ -72,22 +72,24 @@ module.exports = function (robot) {
   //
 
   var logMessage = function(response) {
+    let message = response.message;
     let type;
 
-    if (response.message instanceof hubot.TextMessage) {
+    if ((typeof message === 'object' && message.constructor.name === 'TextMessage') ||
+        message instanceof hubot.TextMessage) {
       type = 'text';
     } else {
       // TODO implement optional join/leave message logging
       return;
     }
 
-    let room = response.message.user.room || 'general';
+    let room = message.user.room || 'general';
 
     let entry = {
-      from: response.message.user['id'],
+      from: message.user['id'],
       timestamp: (+Date.now()),
       type: type,
-      text: response.message.text
+      text: message.text
     };
 
     logEntry(room, entry);
