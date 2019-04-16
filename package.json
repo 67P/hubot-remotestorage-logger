@@ -17,12 +17,11 @@
   "license": "MIT",
   "repository": "https://github.com/67P/hubot-remotestorage-logger",
   "dependencies": {
-    "hubot": "2.x",
+    "hubot": "3.x",
     "remotestorage-module-chat-messages": "~1.0.1",
-    "remotestoragejs": "~1.0.3",
-    "xhr2": "^0.1.4"
+    "remotestoragejs": "~1.2.2"
   },
   "peerDependencies": {
-    "hubot": "2.x"
+    "hubot": "3.x"
   }
 }
