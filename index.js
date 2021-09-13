@@ -1,13 +1,10 @@
 /* Description:
- *   Logs channel messages to a remoteStorage-enabled account
+ *   Logs chat channel messages to a remoteStorage-enabled account
  *
  * Configuration:
  *   RS_LOGGER_USER: RemoteStorage user address
  *   RS_LOGGER_TOKEN: RemoteStorage OAuth bearer token for "chat-messages:rw" scope
- *   RS_LOGGER_SERVER_NAME: Server ID/shortname to be used with remoteStorage (in URLs and metadata), e.g. "freenode"
  *   RS_LOGGER_PUBLIC: Store log files in public folder (doesn't log direct messages)
- *
- * Commands:
  *
  * Notes:
  *   Some code translated from hubot-logger
@@ -25,7 +22,7 @@ const RemoteStorage = require("remotestoragejs");
 const ChatMessages  = require("remotestorage-module-chat-messages");
 
 const remoteStorage = new RemoteStorage({
-  modules: [ChatMessages.default]
+  modules: [ ChatMessages ]
 });
 
 module.exports = function (robot) {
@@ -120,7 +117,7 @@ module.exports = function (robot) {
       let messages = messageCache[room];
 
       if (messages && messages.length > 0) {
-        log(`Storing ${messages.length} messages for room ${room}`);
+        log(`Storing ${messages.length} new messages for room ${room}`);
 
         messageCache[room] = [];
         rsAddMessages(room, messages).then(function(){
@@ -136,10 +133,6 @@ module.exports = function (robot) {
 
   var rsAddMessages = function(room, messages) {
     let archive = {
-      server: {
-        type: hubotAdapter,
-        name: process.env.RS_LOGGER_SERVER_NAME
-      },
       date: new Date(messages[0].timestamp),
       isPublic: process.env.RS_LOGGER_PUBLIC != null
     };
@@ -147,12 +140,18 @@ module.exports = function (robot) {
     switch (hubotAdapter) {
       case 'irc':
         archive.channelName = room;
-        archive.server.ircURI = "irc://" + process.env.HUBOT_IRC_SERVER;
+        archive.service = {
+          protocol: 'IRC',
+          domain: process.env.HUBOT_IRC_SERVER
+        }
         break;
       case 'xmpp':
         let [roomName, mucHost] = room.split("@");
         archive.channelName = roomName;
-        archive.server.xmppMUC = mucHost;
+        archive.service = {
+          protocol: 'XMPP',
+          domain: mucHost
+        }
         break;
     }
 
