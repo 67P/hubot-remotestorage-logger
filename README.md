@@ -13,4 +13,4 @@ This Hubot script logs chat messages to remoteStorage-enabled accounts.
 ## Help
 
 If you have a question about this program, please open an issue for this repo
-or ask us in #67p or #kosmos on Freenode.
+or [chat with us](https://wiki.kosmos.org/Main_Page#Chat).
