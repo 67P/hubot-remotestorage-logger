@@ -22,6 +22,7 @@ const RemoteStorage = require("remotestoragejs");
 const ChatMessages  = require("remotestorage-module-chat-messages");
 
 const remoteStorage = new RemoteStorage({
+  cache: false, // TODO re-enable default caching (SEEN) when getListing maxAge is fixed
   modules: [ ChatMessages ]
 });
 
