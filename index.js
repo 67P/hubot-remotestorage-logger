@@ -143,7 +143,7 @@ module.exports = function (robot) {
         archive.channelName = room;
         archive.service = {
           protocol: 'IRC',
-          domain: process.env.HUBOT_IRC_SERVER
+          domain: process.env.RS_LOGGER_SERVER_NAME || process.env.HUBOT_IRC_SERVER
         }
         break;
       case 'xmpp':
