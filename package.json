@@ -18,8 +18,8 @@
   "repository": "https://github.com/67P/hubot-remotestorage-logger",
   "dependencies": {
     "hubot": "3.x",
-    "remotestorage-module-chat-messages": "^2.1.0",
-    "remotestoragejs": "^2.0.0-beta.1"
+    "remotestorage-module-chat-messages": "^2.1.1",
+    "remotestoragejs": "^2.0.0-beta.3"
   },
   "peerDependencies": {
     "hubot": "3.x"
