@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import logger, { channelInfo } from './index.js'
+import { channelInfo } from '../index.js'
 
 describe('channelInfo()', () => {
   it('maps legacy lowercase IRC adapter names', () => {
@@ -33,6 +33,12 @@ describe('channelInfo()', () => {
     assert.equal(info.service.domain, 'irc.libera.chat')
   })
 
+  it('falls back to HUBOT_IRC_SERVER', () => {
+    const info = channelInfo('IrcAdapter', '#x', { HUBOT_IRC_SERVER: 'znc.kosmos.org' })
+
+    assert.equal(info.service.domain, 'znc.kosmos.org')
+  })
+
   it('maps XMPP adapter class names and splits room@muc', () => {
     assert.deepEqual(
       channelInfo('XmppAdapter', 'kosmos@kosmos.chat', {}),
@@ -46,10 +52,8 @@ describe('channelInfo()', () => {
   it('returns null for unknown adapters', () => {
     assert.equal(channelInfo('Shell', '#x', {}), null)
   })
-})
 
-describe('logger', () => {
-  it('exports a hubot script function', () => {
-    assert.equal(typeof logger, 'function')
+  it('returns null for an undefined adapter name', () => {
+    assert.equal(channelInfo(undefined, '#x', {}), null)
   })
 })
