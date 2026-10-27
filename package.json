@@ -4,6 +4,9 @@
   "description": "Logs channel messages to a remoteStorage account",
   "type": "module",
   "main": "index.js",
+  "files": [
+    "index.js"
+  ],
   "scripts": {
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=index.js --test-coverage-lines=100 --test-coverage-functions=100 --test-coverage-branches=100"
