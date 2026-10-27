@@ -1,14 +1,23 @@
 # hubot-remotestorage-logger
 
-[![npm](https://img.shields.io/npm/v/hubot-remotestorage-logger.svg)](https://www.npmjs.com/package/hubot-remotestorage-logger)
-
-This Hubot script logs chat messages to remoteStorage-enabled accounts.
+This [Hubot](https://hubot.github.com/) script logs chat messages to
+remoteStorage-enabled accounts. It targets **Hubot >= 14** and **Node >= 18**
+(ESM).
 
 ## Configuration
 
 * `RS_LOGGER_USER`: RemoteStorage user address
 * `RS_LOGGER_TOKEN`: RemoteStorage OAuth bearer token for "chat-messages:rw" scope
 * `RS_LOGGER_PUBLIC`: Store log files in public folder (doesn't log direct messages)
+* `RS_LOGGER_SERVER_NAME`: Optional IRC server name override (defaults to
+  `HUBOT_IRC_SERVER`)
+
+## Development
+
+```sh
+npm install
+npm test
+```
 
 ## Help
 

@@ -13,153 +13,175 @@
  *   Sebastian Kippe <sebastian@kip.pe>
 */
 
-const hubot = require("hubot");
+import XHR from 'xhr2'
+import { Listener, TextMessage } from 'hubot'
 
-// TODO Remove once re-added in rs.js package
-global.XMLHttpRequest = require('xhr2');
+// remoteStorage.js is a browser library and expects the XMLHttpRequest API to
+// be available globally when it is loaded.
+globalThis.XMLHttpRequest = XHR
 
-const RemoteStorage = require("remotestoragejs");
-const ChatMessages  = require("remotestorage-module-chat-messages");
+const { default: RemoteStorage } = await import('remotestoragejs')
+const { default: ChatMessages } = await import('remotestorage-module-chat-messages')
 
 const remoteStorage = new RemoteStorage({
   cache: false, // TODO re-enable default caching (SEEN) when getListing maxAge is fixed
-  modules: [ ChatMessages ]
-});
+  modules: [ChatMessages]
+})
 
-module.exports = function (robot) {
+// Map a hubot room to its remoteStorage archive channel info.
+//
+// In hubot >= 14 the adapter name is the adapter class name (e.g.
+// "IrcAdapter" or "XmppAdapter"), so match on a substring rather than an exact
+// value. Returns null for adapters we don't know how to archive.
+export function channelInfo(adapterName, room, env = process.env) {
+  const adapter = String(adapterName ?? '').toLowerCase()
+
+  if (adapter.includes('irc')) {
+    return {
+      channelName: room,
+      service: {
+        protocol: 'IRC',
+        domain: env.RS_LOGGER_SERVER_NAME || env.HUBOT_IRC_SERVER
+      }
+    }
+  }
+
+  if (adapter.includes('xmpp')) {
+    const [roomName, mucHost] = String(room).split('@')
+    return {
+      channelName: roomName,
+      service: {
+        protocol: 'XMPP',
+        domain: mucHost
+      }
+    }
+  }
+
+  return null
+}
+
+export default function (robot) {
 
   //
   // SETUP
   //
 
-  let rsToken, rsUser, hubotAdapter;
-  let messageCache = {};
+  let rsToken, rsUser
+  let messageCache = {}
 
-  rsUser = process.env.RS_LOGGER_USER;
-  rsToken = process.env.RS_LOGGER_TOKEN;
-  hubotAdapter = robot.adapterName;
+  rsUser = process.env.RS_LOGGER_USER
+  rsToken = process.env.RS_LOGGER_TOKEN
 
-  const log = function(str, logLevel='info') {
-    robot.logger[logLevel](`[hubot-rs-logger] ${str}`);
-  };
-
-  if (typeof rsUser === "undefined" || typeof rsToken === "undefined") {
-    throw new Error('ENV variable for RS user and/or token missing');
+  const log = function (str, logLevel = 'info') {
+    robot.logger[logLevel](`[hubot-rs-logger] ${str}`)
   }
 
-  log("RemoteStorage credentials set, connecting storage...");
+  if (typeof rsUser === 'undefined' || typeof rsToken === 'undefined') {
+    throw new Error('ENV variable for RS user and/or token missing')
+  }
 
-  remoteStorage.access.claim('chat-messages', 'rw');
-  // remoteStorage.caching.disable('/');
+  log('RemoteStorage credentials set, connecting storage...')
 
-  remoteStorage.on('ready', function() {
-    log("remoteStorage ready");
-  });
-  remoteStorage.on('connected', function() {
-    log("remoteStorage connected");
-    setInterval(flushMessageCache, 2000);
-  });
-  remoteStorage.on('error', function(error) {
-    log("remoteStorage.js had a problem: " + error);
-  });
+  remoteStorage.access.claim('chat-messages', 'rw')
 
-  remoteStorage.connect(rsUser, rsToken);
+  remoteStorage.on('ready', function () {
+    log('remoteStorage ready')
+  })
+  remoteStorage.on('connected', function () {
+    log('remoteStorage connected')
+    setInterval(flushMessageCache, 2000)
+  })
+  remoteStorage.on('error', function (error) {
+    log('remoteStorage.js had a problem: ' + error)
+  })
+
+  remoteStorage.connect(rsUser, rsToken)
 
   //
   // LOGS
   //
 
-  var logMessage = function(response) {
-    let message = response.message;
-    let type;
+  var logMessage = function (response) {
+    let message = response.message
+    let type
 
     if ((typeof message === 'object' && message.constructor.name === 'TextMessage') ||
-        message instanceof hubot.TextMessage) {
-      type = 'text';
+        message instanceof TextMessage) {
+      type = 'text'
     } else {
       // TODO implement optional join/leave message logging
-      return;
+      return
     }
 
-    let room = message.user.room || 'general';
+    let room = message.user.room || 'general'
 
     let entry = {
       from: message.user['id'],
       timestamp: (+Date.now()),
       type: type,
       text: message.text
-    };
+    }
 
-    logEntry(room, entry);
-  };
+    logEntry(room, entry)
+  }
 
   var logResponse = (room, strings) => {
-    strings.forEach(function(string) {
-      string.split('\n').forEach(function(line) {
+    strings.forEach(function (string) {
+      string.split('\n').forEach(function (line) {
         let entry = {
           from: robot.name,
           timestamp: (+Date.now()),
           type: 'text',
           text: line
-        };
+        }
 
-        logEntry(room, entry);
-      });
-    });
-  };
+        logEntry(room, entry)
+      })
+    })
+  }
 
-  var logEntry = function(room, entry) {
-    if (!(messageCache[room] instanceof Array)) { messageCache[room] = []; }
-    messageCache[room].push(entry);
-  };
+  var logEntry = function (room, entry) {
+    if (!(messageCache[room] instanceof Array)) { messageCache[room] = [] }
+    messageCache[room].push(entry)
+  }
 
-  var flushMessageCache = function() {
-    Object.keys(messageCache).forEach(function(room) {
-      let messages = messageCache[room];
+  var flushMessageCache = function () {
+    Object.keys(messageCache).forEach(function (room) {
+      let messages = messageCache[room]
 
       if (messages && messages.length > 0) {
-        log(`Storing ${messages.length} new messages for room ${room}`);
+        log(`Storing ${messages.length} new messages for room ${room}`)
 
-        messageCache[room] = [];
-        rsAddMessages(room, messages).then(function(){
-        }, function(error) {
-          messageCache[room] = messages.concat(messageCache[room]);
-          log(error, 'error');
-        });
+        messageCache[room] = []
+        rsAddMessages(room, messages).then(function () {
+        }, function (error) {
+          messageCache[room] = messages.concat(messageCache[room])
+          log(error, 'error')
+        })
       } else {
         // nothing to flush
       }
-    });
-  };
+    })
+  }
 
-  var rsAddMessages = function(room, messages) {
-    let archive = {
-      date: new Date(messages[0].timestamp),
-      isPublic: process.env.RS_LOGGER_PUBLIC != null
-    };
-
-    switch (hubotAdapter) {
-      case 'irc':
-        archive.channelName = room;
-        archive.service = {
-          protocol: 'IRC',
-          domain: process.env.RS_LOGGER_SERVER_NAME || process.env.HUBOT_IRC_SERVER
-        }
-        break;
-      case 'xmpp':
-        let [roomName, mucHost] = room.split("@");
-        archive.channelName = roomName;
-        archive.service = {
-          protocol: 'XMPP',
-          domain: mucHost
-        }
-        break;
+  var rsAddMessages = function (room, messages) {
+    const info = channelInfo(robot.adapterName, room)
+    if (!info) {
+      log(`Not archiving messages for unknown adapter "${robot.adapterName}"`, 'warn')
+      return Promise.resolve()
     }
 
-    let rsArchive = new remoteStorage.chatMessages.DailyArchive(archive);
+    let archive = {
+      date: new Date(messages[0].timestamp),
+      isPublic: process.env.RS_LOGGER_PUBLIC != null,
+      channelName: info.channelName,
+      service: info.service
+    }
 
-    return rsArchive.addMessages(messages);
-  };
+    let rsArchive = new remoteStorage.chatMessages.DailyArchive(archive)
+
+    return rsArchive.addMessages(messages)
+  }
 
   //
   // ROBOT
@@ -167,26 +189,26 @@ module.exports = function (robot) {
 
   // Add a listener that matches all messages and calls logMessage
   // with a Response object
-  var listener = new hubot.Listener(robot, (function() {
-    return true;
-  }), function(res) {
-    return logMessage(res);
-  });
-  robot.listeners.push(listener);
+  var listener = new Listener(robot, (function () {
+    return true
+  }), function (res) {
+    return logMessage(res)
+  })
+  robot.listeners.push(listener)
 
   // Override send methods in the Response prototype so that we can
   // log Hubot's replies
   var responseOrig = {
     send: robot.Response.prototype.send,
     reply: robot.Response.prototype.reply
-  };
-  robot.Response.prototype.send = function(...strings) {
-    logResponse(this.message.user.room, strings);
-    responseOrig.send.call(this, ...strings);
-  };
-  robot.Response.prototype.reply = function(...strings) {
-    logResponse(this.message.user.room, strings);
-    responseOrig.reply.call(this, ...strings);
-  };
+  }
+  robot.Response.prototype.send = function (...strings) {
+    logResponse(this.message.user.room, strings)
+    return responseOrig.send.call(this, ...strings)
+  }
+  robot.Response.prototype.reply = function (...strings) {
+    logResponse(this.message.user.room, strings)
+    return responseOrig.reply.call(this, ...strings)
+  }
 
-};
+}
