@@ -14,7 +14,7 @@
 */
 
 import XHR from 'xhr2'
-import { Listener, TextMessage } from 'hubot'
+import { TextMessage } from 'hubot'
 
 // remoteStorage.js is a browser library and expects the XMLHttpRequest API to
 // be available globally when it is loaded.
@@ -27,6 +27,9 @@ const remoteStorage = new RemoteStorage({
   cache: false, // TODO re-enable default caching (SEEN) when getListing maxAge is fixed
   modules: [ChatMessages]
 })
+
+// Response methods whose output is archived.
+const LOGGED_METHODS = ['send', 'reply', 'emote']
 
 // Map a hubot room to its remoteStorage archive channel info.
 //
@@ -62,7 +65,16 @@ export function channelInfo(adapterName, room, env = process.env) {
 
 // Build the hubot script function. Dependencies are injected so the whole
 // logger can be unit tested; the default export below wires in the real ones.
-export function createLogger({ remoteStorage, Listener, TextMessage, env = process.env }) {
+//
+// Logging semantics (deliberately hiding bot commands and their replies):
+// - inbound: log every message, except those the CommandBus consumes. The
+//   CommandBus registers its receive middleware before this one (in
+//   Robot#run) and, for a command, sets `message.done` and returns false,
+//   which stops the middleware chain before our handler runs.
+// - outbound: log `send`/`reply`/`emote` only for messages we actually logged
+//   inbound. CommandBus replies originate from a message we never saw, so
+//   they are skipped. This does not depend on the adapter's Response subclass.
+export function createLogger({ remoteStorage, TextMessage, env = process.env }) {
   return function use(robot) {
 
     //
@@ -70,6 +82,10 @@ export function createLogger({ remoteStorage, Listener, TextMessage, env = proce
     //
 
     const messageCache = {}
+
+    // Messages that were logged inbound; used to decide whether a response
+    // belongs to a command (which we hide) or not.
+    const loggedMessages = new WeakSet()
 
     const log = function (str, logLevel = 'info') {
       robot.logger[logLevel](`[hubot-rs-logger] ${str}`)
@@ -127,13 +143,15 @@ export function createLogger({ remoteStorage, Listener, TextMessage, env = proce
       logEntry(room, entry)
     }
 
-    var logResponse = (room, strings) => {
+    var logResponse = function (room, strings, method = 'send') {
+      const type = method === 'emote' ? 'action' : 'text'
+
       strings.forEach(function (string) {
         string.split('\n').forEach(function (line) {
           let entry = {
             from: robot.name,
             timestamp: (+Date.now()),
-            type: 'text',
+            type: type,
             text: line
           }
 
@@ -189,32 +207,29 @@ export function createLogger({ remoteStorage, Listener, TextMessage, env = proce
     // ROBOT
     //
 
-    // Add a listener that matches all messages and calls logMessage
-    // with a Response object
-    var listener = new Listener(robot, (function () {
+    // Inbound: log every message the CommandBus didn't consume (see above).
+    robot.receiveMiddleware(function (context) {
+      const message = context.response.message
+      logMessage({ message })
+      loggedMessages.add(message)
       return true
-    }), function (res) {
-      return logMessage(res)
     })
-    robot.listeners.push(listener)
 
-    // Override send methods in the Response prototype so that we can
-    // log Hubot's replies
-    var responseOrig = {
-      send: robot.Response.prototype.send,
-      reply: robot.Response.prototype.reply
-    }
-    robot.Response.prototype.send = function (...strings) {
-      logResponse(this.message.user.room, strings)
-      return responseOrig.send.call(this, ...strings)
-    }
-    robot.Response.prototype.reply = function (...strings) {
-      logResponse(this.message.user.room, strings)
-      return responseOrig.reply.call(this, ...strings)
-    }
+    // Outbound: log the bot's own send/reply/emote for messages we logged.
+    robot.responseMiddleware(function (context) {
+      if (!LOGGED_METHODS.includes(context.method)) { return true }
+
+      const message = context.response.message
+      if (!loggedMessages.has(message)) { return true }
+
+      const room = context.response.envelope?.room ?? message?.user?.room ?? 'general'
+      logResponse(room, context.strings, context.method)
+
+      return true
+    })
 
     return { logMessage, logResponse, logEntry, flushMessageCache, rsAddMessages, messageCache }
   }
 }
 
-export default createLogger({ remoteStorage, Listener, TextMessage })
+export default createLogger({ remoteStorage, TextMessage })
