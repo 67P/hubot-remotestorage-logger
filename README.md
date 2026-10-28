@@ -1,3 +1,6 @@
+[![npm](https://img.shields.io/npm/v/hubot-remotestorage-logger.svg)](https://www.npmjs.com/package/hubot-remotestorage-logger)
+[![CI](https://github.com/67P/hubot-remotestorage-logger/actions/workflows/test.yml/badge.svg)](https://github.com/67P/hubot-remotestorage-logger/actions/workflows/test.yml)
+
 # hubot-remotestorage-logger
 
 This [Hubot](https://hubot.github.com/) script logs chat messages to
