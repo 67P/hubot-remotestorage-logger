@@ -39,17 +39,9 @@ function makeRemoteStorage() {
 function makeRobot(overrides = {}) {
   const calls = { debug: [], info: [], warn: [], error: [] }
 
-  class Response {
-    constructor(message) { this.message = message }
-    async send(...strings) { return ['send', ...strings] }
-    async reply(...strings) { return ['reply', ...strings] }
-  }
-
-  return {
+  const robot = {
     name: 'botka',
     adapterName: 'IrcAdapter',
-    Response,
-    listeners: [],
     logger: {
       debug: (m) => calls.debug.push(m),
       info: (m) => calls.info.push(m),
@@ -57,34 +49,25 @@ function makeRobot(overrides = {}) {
       error: (m) => calls.error.push(m)
     },
     calls,
+    receiveMiddleware(fn) { robot._receiveMiddleware = fn },
+    responseMiddleware(fn) { robot._responseMiddleware = fn },
     ...overrides
   }
+
+  return robot
 }
 
 function setup({ env = {}, robotOverrides = {} } = {}) {
   const remoteStorage = makeRemoteStorage()
-  const listeners = []
-
-  class FakeListener {
-    constructor(robot, matcher, options, callback) {
-      this.robot = robot
-      this.matcher = matcher
-      if (typeof options === 'function') { callback = options }
-      this.callback = callback
-      listeners.push(this)
-    }
-  }
-
   const robot = makeRobot(robotOverrides)
   const use = createLogger({
     remoteStorage,
-    Listener: FakeListener,
     TextMessage,
     env: { RS_LOGGER_USER: 'user@example.com', RS_LOGGER_TOKEN: 'token', ...env }
   })
   const internals = use(robot)
 
-  return { remoteStorage, robot, internals, listeners }
+  return { remoteStorage, robot, internals }
 }
 
 function textMessage(overrides = {}) {
@@ -98,7 +81,6 @@ describe('logger setup', () => {
   it('throws when RS_LOGGER_USER is missing', () => {
     const use = createLogger({
       remoteStorage: makeRemoteStorage(),
-      Listener: class {},
       TextMessage,
       env: { RS_LOGGER_TOKEN: 'token' }
     })
@@ -109,7 +91,6 @@ describe('logger setup', () => {
   it('throws when RS_LOGGER_TOKEN is missing', () => {
     const use = createLogger({
       remoteStorage: makeRemoteStorage(),
-      Listener: class {},
       TextMessage,
       env: { RS_LOGGER_USER: 'user@example.com' }
     })
@@ -133,14 +114,11 @@ describe('logger setup', () => {
     assert.equal(typeof remoteStorage.handlers.error, 'function')
   })
 
-  it('adds a listener and patches the Response prototype', () => {
-    const { robot, listeners } = setup()
+  it('registers receive and response middleware', () => {
+    const { robot } = setup()
 
-    assert.equal(listeners.length, 1)
-    assert.equal(robot.listeners[0], listeners[0])
-    assert.notEqual(robot.Response.prototype.send, undefined)
-    assert.ok(robot.Response.prototype.send.toString().includes('logResponse'))
-    assert.ok(robot.Response.prototype.reply.toString().includes('logResponse'))
+    assert.equal(typeof robot._receiveMiddleware, 'function')
+    assert.equal(typeof robot._responseMiddleware, 'function')
   })
 })
 
@@ -242,6 +220,14 @@ describe('logResponse()', () => {
     const entries = internals.messageCache['#room']
     assert.equal(entries.length, 2)
     assert.ok(entries.every((e) => e.from === 'botka'))
+  })
+
+  it('logs emotes as action type', () => {
+    const { internals } = setup()
+
+    internals.logResponse('#room', ['waves'], 'emote')
+
+    assert.equal(internals.messageCache['#room'][0].type, 'action')
   })
 })
 
@@ -350,53 +336,104 @@ describe('rsAddMessages()', () => {
   })
 })
 
-describe('listener', () => {
-  it('matches every message', () => {
-    const { listeners } = setup()
+describe('inbound middleware', () => {
+  it('logs a message and returns true', () => {
+    const { robot, internals } = setup()
 
-    assert.equal(listeners[0].matcher(), true)
-  })
+    const result = robot._receiveMiddleware({ response: { message: textMessage() } })
 
-  it('routes matched messages through logMessage', () => {
-    const { internals, listeners } = setup()
-
-    listeners[0].callback({ message: textMessage() })
-
+    assert.equal(result, true)
     assert.equal(internals.messageCache['#kosmos-random'].length, 1)
   })
 })
 
-describe('Response interception', () => {
-  it('logs and forwards send()', async () => {
+describe('outbound middleware', () => {
+  it('logs send/reply for a message that was logged inbound', () => {
     const { robot, internals } = setup()
-    const response = new robot.Response({ user: { room: '#room' } })
+    const message = textMessage()
 
-    const result = await response.send('a\nb')
+    robot._receiveMiddleware({ response: { message } })
+    robot._responseMiddleware({
+      response: { message, envelope: { room: '#kosmos-random' } },
+      strings: ['pong'],
+      method: 'send'
+    })
 
-    assert.deepEqual(result, ['send', 'a\nb'])
-    assert.deepEqual(internals.messageCache['#room'].map((e) => e.text), ['a', 'b'])
+    assert.deepEqual(internals.messageCache['#kosmos-random'].map((e) => e.text), ['hello', 'pong'])
   })
 
-  it('logs and forwards reply()', async () => {
+  it('logs emote as an action', () => {
     const { robot, internals } = setup()
-    const response = new robot.Response({ user: { room: '#room' } })
+    const message = textMessage()
 
-    const result = await response.reply('hi')
+    robot._receiveMiddleware({ response: { message } })
+    robot._responseMiddleware({
+      response: { message, envelope: { room: '#kosmos-random' } },
+      strings: ['waves'],
+      method: 'emote'
+    })
 
-    assert.deepEqual(result, ['reply', 'hi'])
-    assert.deepEqual(internals.messageCache['#room'].map((e) => e.text), ['hi'])
+    const entry = internals.messageCache['#kosmos-random'].find((e) => e.text === 'waves')
+    assert.equal(entry.type, 'action')
+  })
+
+  it('skips replies for messages that were not logged inbound (e.g. commands)', () => {
+    const { robot, internals } = setup()
+    const commandMessage = textMessage({ text: 'help' })
+
+    const result = robot._responseMiddleware({
+      response: { message: commandMessage, envelope: { room: '#kosmos-random' } },
+      strings: ['commands: ...'],
+      method: 'reply'
+    })
+
+    assert.equal(result, true)
+    assert.equal(internals.messageCache['#kosmos-random'], undefined)
+  })
+
+  it('skips methods that are not logged', () => {
+    const { robot, internals } = setup()
+    const message = textMessage()
+
+    robot._receiveMiddleware({ response: { message } })
+    for (const method of ['topic', 'play', 'locked']) {
+      robot._responseMiddleware({
+        response: { message, envelope: { room: '#kosmos-random' } },
+        strings: ['x'],
+        method
+      })
+    }
+
+    // only the inbound message
+    assert.equal(internals.messageCache['#kosmos-random'].length, 1)
+  })
+
+  it('falls back to the message room, then to general', () => {
+    const { robot, internals } = setup()
+
+    const message = textMessage({ user: { id: 'mark', room: '#from-user' } })
+    robot._receiveMiddleware({ response: { message } })
+    robot._responseMiddleware({ response: { message }, strings: ['a'], method: 'send' })
+    assert.deepEqual(internals.messageCache['#from-user'].map((e) => e.text), ['hello', 'a'])
+
+    const roomless = textMessage({ user: { id: 'mark' } })
+    robot._receiveMiddleware({ response: { message: roomless } })
+    robot._responseMiddleware({ response: { message: roomless }, strings: ['b'], method: 'send' })
+    assert.deepEqual(internals.messageCache.general.map((e) => e.text), ['hello', 'b'])
   })
 })
 
 describe('integration', () => {
-  it('archives a received message and a reply', () => {
-    const { remoteStorage, robot, internals, listeners } = setup({ env: { HUBOT_IRC_SERVER: 'irc.libera.chat' } })
+  it('archives a received message and the bot reply', () => {
+    const { remoteStorage, robot, internals } = setup({ env: { HUBOT_IRC_SERVER: 'irc.libera.chat' } })
+    const message = textMessage()
 
-    listeners[0].callback({ message: textMessage() })
-
-    const response = new robot.Response({ user: { room: '#kosmos-random' } })
-    response.send('pong')
-
+    robot._receiveMiddleware({ response: { message } })
+    robot._responseMiddleware({
+      response: { message, envelope: { room: '#kosmos-random' } },
+      strings: ['pong'],
+      method: 'reply'
+    })
     internals.flushMessageCache()
 
     const stored = remoteStorage.archives[0].messages
